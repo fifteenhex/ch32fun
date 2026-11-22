@@ -12,3 +12,4 @@ compile_commands.json
 .cache
 ch32fun/generated_*.ld
 **/.DS_Store
+/build/
