@@ -253,6 +253,10 @@ void USBFS_IRQHandler()
 					break;
 
 				default:
+					// A packet with the wrong data toggle is one the host sent
+					// again after losing our ACK: it gets acknowledged, but its
+					// data was already taken the first time.
+					if( !( intfgst & CRB_UIS_TOG_OK ) ) break;
 #if defined(CH5xx) || defined(CH32X03x)|| defined (CH32V10x)
 					UEP_CTRL_TX(ep) ^= USBFS_UEP_R_TOG;
 #else
