@@ -1105,11 +1105,15 @@ int USBFS_SendEndpointNEW( int endp, uint8_t* data, int len, int copy)
 #endif
 		}
 	}
-	// NVIC_DisableIRQ( USB_IRQn );
+	// Busy before the ACK: the IN can complete, and its interrupt clear
+	// busy, as soon as the endpoint is armed. The control byte holds the
+	// OUT side too on some chips, which the interrupt may change between
+	// the read and the write.
+	NVIC_DisableIRQ( USB_IRQn );
+	USBFSCTX.endpoints[endp].busy = 1;
 	UEP_CTRL_LEN( endp ) = len;
 	UEP_CTRL_TX( endp ) = ( UEP_CTRL_TX( endp ) & ~USBFS_UEP_T_RES_MASK ) | USBFS_UEP_T_RES_ACK;
-	USBFSCTX.endpoints[endp].busy = 1;
-	// NVIC_EnableIRQ( USB_IRQn );
+	NVIC_EnableIRQ( USB_IRQn );
 	return 0;
 }
 
