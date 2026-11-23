@@ -87,6 +87,29 @@ void USBFS_IRQHandler()
 		
 		int token = ( intfgst & CMASK_UIS_TOKEN) >> 12;
 		int ep = ( intfgst & CMASK_UIS_ENDP ) >> 8;
+#if defined(CH5xx) || defined(CH32X03x)
+		// A SETUP can't be NAKed, so it is taken even while an earlier
+		// transaction's interrupt is pending, before this handler reads
+		// INT_ST or while it runs: INT_ST still names the earlier one,
+		// and only SETUP_ACT tells of the SETUP. That is handled last.
+		int setup_seen = token != CUIS_TOKEN_SETUP && ( USBFS->INT_ST & 0x80 );
+		if( setup_seen )
+		{
+			ctx->USBFS_setups_behind++;
+			if( ep == 0 )
+			{
+				// The SETUP is already over ep0's buffer, and it ends
+				// whatever ep0 was doing anyway.
+				token = CUIS_TOKEN_SETUP;
+			}
+			else if( token == CUIS_TOKEN_OUT )
+			{
+				// RX_LEN and TOG_OK may now be the SETUP's.
+				ctx->USBFS_setups_behind_out++;
+			}
+		}
+transfer:
+#endif
 #if ANYPRINTF
 		if( usb_debug ) printf("[USB] TRANSFER, token = %02x, ep = %d, bmRequestType = %02x, bRequest = %02x\n", token, ep, pUSBFS_SetupReqPak->bmRequestType, pUSBFS_SetupReqPak->bRequest);
 #endif
@@ -280,6 +303,10 @@ void USBFS_IRQHandler()
 			UEP_CTRL_TX(0) = USBFS_UEP_T_RES_NAK | CHECK_USBFS_UEP_T_AUTO_TOG | USBFS_UEP_T_TOG;
 			UEP_CTRL_RX(0) = USBFS_UEP_R_RES_NAK | CHECK_USBFS_UEP_R_AUTO_TOG | USBFS_UEP_R_TOG;
 #endif
+
+			// A new request ends the last, whose status stage may have
+			// been skipped for this SETUP right behind it
+			ctx->USBFS_errata_dont_send_endpoint_in_window = 0;
 
 			/* Store All Setup Values */
 			int USBFS_SetupReqType = USBFSCTX.USBFS_SetupReqType  = pUSBFS_SetupReqPak->bmRequestType;
@@ -680,6 +707,17 @@ void USBFS_IRQHandler()
 		default :
 			break;
 		}
+#if defined(CH5xx) || defined(CH32X03x)
+		// Looked at last thing before the clear, which would lose it
+		if( token != CUIS_TOKEN_SETUP && ( USBFS->INT_ST & 0x80 ) )
+		{
+			if( !setup_seen )
+				ctx->USBFS_setups_behind++;	// came while handling
+			token = CUIS_TOKEN_SETUP;
+			ep = 0;
+			goto transfer;
+		}
+#endif
 		// printf("clear transfer int flag\n");
 		USBFS->INT_FG = CRB_UIF_TRANSFER;
 	}

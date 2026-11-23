@@ -483,6 +483,8 @@ struct _USBState
 	uint8_t USBFS_HidProtocol[FUSB_HID_INTERFACES];
 #endif
 	volatile uint8_t USBFS_errata_dont_send_endpoint_in_window;
+	uint32_t USBFS_setups_behind; // SETUPs that came in behind another transaction, CH5xx/CH32X03x
+	uint32_t USBFS_setups_behind_out; // of those, ones behind a data endpoint OUT already pending
 };
 
 extern struct _USBState USBFSCTX;
